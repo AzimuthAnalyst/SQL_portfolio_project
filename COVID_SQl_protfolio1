@@ -1,0 +1,135 @@
+-- Exploring data first 
+select
+location,
+-- date,
+-- population,
+max(total_cases) Max_cases,
+max(total_deaths) as max_deaths
+-- (total_deaths) as max_deaths,
+-- max((total_deaths/population)) *100 as deaths_percent_based_on_population
+from CovidDeath
+where continent is NULL 
+group by location
+order by max_cases desc,max_deaths DESC
+
+-- select 
+-- location,
+-- sum(new_deaths) as max_deaths
+-- from CovidDeath
+-- where continent is NULL and location ='africa'
+-- group by location
+-- ORDER by max_deaths desc
+
+
+select * from CovidDeath
+
+-- global numbers 
+
+select 
+date, 
+sum(new_cases) as max_cases,
+sum(new_deaths) as max_death,
+(sum(new_deaths)/SUM(new_cases))*100 as death_percent_globally
+from CovidDeath
+where continent is not NULL and new_cases != 0
+group by date 
+order by 2, death_percent_globally 
+
+
+select 
+-- location,
+-- date, 
+sum(new_cases) as total_new_cases,
+sum(new_deaths) as max_death,
+(sum(new_deaths)/SUM(new_cases))*100 as global_death_percentage 
+from CovidDeath
+where continent is not NULL and new_cases <> 0 
+-- group by date, location
+order by 2 desc
+
+
+-- total vaccination vs population + Rolling count
+
+select 
+dea.continent, 
+dea.location, 
+dea.date, 
+dea.population, 
+vac.new_vaccinations,
+SUM(cast(vac.new_vaccinations as bigint)) over (partition by dea.location order by dea.location, dea.date) as rolling_people_vaccinated
+FROM CovidDeath dea
+JOIN CovidVaccinations vac
+on dea.location = vac.location 
+and dea.date = vac.date
+where dea.continent is not NULL 
+order by location, date DESC
+
+
+
+-- Use CTE 
+
+with PopvsVac (continent, location, date, population, new_vaccinations,rolling_people_vaccinated)
+as 
+(
+select 
+dea.continent, 
+dea.location, 
+dea.date, 
+dea.population, 
+vac.new_vaccinations,
+SUM(cast(vac.new_vaccinations as bigint)) over (partition by dea.location order by dea.location, dea.date) as rolling_people_vaccinated
+FROM CovidDeath dea
+JOIN CovidVaccinations vac
+on dea.location = vac.location 
+and dea.date = vac.date
+where dea.continent is not NULL 
+-- order by location, date DESC
+)
+select *, (rolling_people_vaccinated/population)*100 
+from PopvsVac
+
+
+
+-- Temp table 
+drop table if EXISTS #percent_popultation_vaccinated
+CREATE table #percent_popultation_vaccinated (
+
+continent varchar(255),
+location varchar(255),
+date nvarchar(50),
+population NUMERIC,
+new_vaccinations NUMERIC,
+rolling_people_vaccinated NUMERIC
+)
+INSERT into #percent_popultation_vaccinated
+select 
+dea.continent, 
+dea.location, 
+dea.date, 
+dea.population, 
+vac.new_vaccinations,
+SUM(cast(vac.new_vaccinations as bigint)) over (partition by dea.location order by dea.location, dea.date) as rolling_people_vaccinated
+FROM CovidDeath dea
+JOIN CovidVaccinations vac
+on dea.location = vac.location 
+and dea.date = vac.date
+where dea.continent is not NULL 
+order by location, date DESC
+
+select *, (rolling_people_vaccinated/population)*100 
+from #percent_popultation_vaccinated
+
+
+
+-- Create View to store data for later visualizations 
+
+create view continent_cases_vs_deaths as 
+select
+location,
+max(total_cases) Max_cases,
+max(total_deaths) as max_deaths
+from CovidDeath
+where continent is NULL 
+group by location
+order by max_cases desc,max_deaths DESC
+
